@@ -4,6 +4,7 @@ runtime-version: '6.11'
 sdk: org.kde.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.openjdk
+  - org.freedesktop.Sdk.Extension.openjdk21
 add-extensions:
   org.freedesktop.Sdk.Extension.texlive:
     directory: texlive
@@ -97,16 +98,44 @@ modules:
   - name: languagetool
     buildsystem: simple
     build-commands:
-      - mkdir /app/languagetool
-      - cp -r * /app/languagetool
+      - |
+        . /usr/lib/sdk/openjdk21/enable.sh
+        python3 - <<'PY'
+        from datetime import datetime, timezone
+        from pathlib import Path
+        from xml.etree import ElementTree
+
+        namespace = {'m': 'http://maven.apache.org/POM/4.0.0'}
+        pom = ElementTree.parse('pom.xml')
+        version = pom.findtext('m:version', namespaces=namespace)
+        if version == '${revision}':
+            version = pom.findtext('m:properties/m:revision', namespaces=namespace)
+        if not version:
+            raise ValueError('LanguageTool source version not found')
+        timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        Path('languagetool-core/src/main/resources/git.properties').write_text(
+            f'git.build.version={version}\ngit.build.time={timestamp}\ngit.commit.id.abbrev=\n'
+        )
+        PY
+        mvn --offline --batch-mode --settings maven-settings.xml \
+          -Dmaven.repo.local="${PWD}/m2/repository" \
+          -DskipTests -Dmaven.gitcommitid.skip=true -pl languagetool-standalone -am package
+      - unzip -q languagetool-standalone/target/LanguageTool-*.zip -d distribution
+      - mkdir -p /app/languagetool
+      - cp -a distribution/LanguageTool-*/. /app/languagetool/
     sources:
-      - url: https://languagetool.org/download/LanguageTool-6.6.zip
+      - url: https://github.com/languagetool-org/languagetool/archive/refs/tags/v6.8.tar.gz
         type: archive
-        sha256: 53600506b399bb5ffe1e4c8dec794fd378212f14aaf38ccef9b6f89314d11631
+        sha256: 5a1cab8e63e67d7c1b8f557cb0273adf4a1b248f902ddd08ae415a849bf4ff96
         x-checker-data:
           type: anitya
           project-id: 241970
-          url-template: https://languagetool.org/download/LanguageTool-$version.zip
+          url-template: https://github.com/languagetool-org/languagetool/archive/refs/tags/v$version.tar.gz
+      - type: patch
+        path: languagetool-os-maven-plugin.patch
+      - maven-dependencies.json
+      - type: file
+        path: maven-settings.xml
 
   - name: pandoc
     buildsystem: simple

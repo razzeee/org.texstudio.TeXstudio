@@ -1,0 +1,10 @@
+--- a/languagetool-core/pom.xml
++++ b/languagetool-core/pom.xml
+@@ -298,6 +298,7 @@
+             <extension>
+                 <groupId>kr.motd.maven</groupId>
+                 <artifactId>os-maven-plugin</artifactId>
++                <version>${kr.motd.maven.os-maven-plugin.version}</version>
+             </extension>
+         </extensions>
+     </build>
